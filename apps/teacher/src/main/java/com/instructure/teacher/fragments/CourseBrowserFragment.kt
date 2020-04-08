@@ -17,19 +17,34 @@
 package com.instructure.teacher.fragments
 
 import android.animation.ObjectAnimator
+import android.content.DialogInterface
+import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
+import android.util.Log
 import android.view.MenuItem
 import android.view.View
+import androidx.appcompat.app.AlertDialog
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
+import com.instructure.canvasapi2.managers.CourseManager
 import com.instructure.canvasapi2.models.CanvasContext
 import com.instructure.canvasapi2.models.Course
 import com.instructure.canvasapi2.models.Tab
+import com.instructure.canvasapi2.models.User
+import com.instructure.canvasapi2.utils.ApiPrefs
 import com.instructure.canvasapi2.utils.isValid
+import com.instructure.canvasapi2.utils.weave.awaitApi
+import com.instructure.canvasapi2.utils.weave.catch
+import com.instructure.canvasapi2.utils.weave.tryWeave
 import com.instructure.interactions.router.Route
+import com.instructure.pandautils.dialogs.InstAlertDialog
 import com.instructure.pandautils.fragments.BaseSyncFragment
 import com.instructure.pandautils.utils.*
+import com.instructure.pandautils.utils.Const
+import com.instructure.pandautils.utils.Const.CANVAS_STUDENT_ID
+import com.instructure.pandautils.utils.Const.MARKET_URI_PREFIX
 import com.instructure.teacher.R
 import com.instructure.teacher.adapters.CourseBrowserAdapter
 import com.instructure.teacher.events.CourseUpdatedEvent
@@ -83,7 +98,8 @@ class CourseBrowserFragment : BaseSyncFragment<
             Tab.PEOPLE_ID,
             Tab.FILES_ID,
             Tab.PAGES_ID,
-            Tab.MODULES_ID -> true
+            Tab.MODULES_ID,
+            Tab.STUDENT_VIEW-> true
             else -> {
                 if(attendanceId != 0L && tab.tabId.endsWith(attendanceId.toString())) {
                     TeacherPrefs.attendanceExternalToolId = tab.tabId
@@ -198,6 +214,9 @@ class CourseBrowserFragment : BaseSyncFragment<
                         val bundle = ModuleListFragment.makeBundle(presenter.canvasContext)
                         RouteMatcher.route(requireContext(), Route(ModuleListFragment::class.java, null, bundle))
                     }
+                    Tab.STUDENT_VIEW -> {
+                        handleStudentViewClick()
+                    }
                     else -> {
                         if(tab.type == Tab.TYPE_EXTERNAL) {
                             // if the user is a designer we don't want to let them look at LTI tools (like attendance)
@@ -279,4 +298,75 @@ class CourseBrowserFragment : BaseSyncFragment<
             subtitleAnimation.start()
         }
     }
+
+    // TODO: Put behind a feature flag
+    private fun handleStudentViewClick() {
+        Log.d("TAG", "handle studentview")
+        // Check if the student app is installed
+        context?.packageManager?.getInstalledPackages(0)?.let { packages ->
+            val studentInstalled = packages.any {
+                it.packageName == "com.instructure.candroid"
+            }
+            Log.d("TAG", "Student installed $studentInstalled")
+
+            if (studentInstalled) {
+                // Check if the test student enrollment exists
+                val testStudentsCall = tryWeave {
+                    Log.d("TAG", "Making api call...")
+                    val students = awaitApi<List<User>>{CourseManager.getTestStudents(mCanvasContext.id, false, it)}
+                    if (students.isEmpty()) {
+                        // TODO: Make API call to create test student enrollment
+                        // TODO: TESTING ONLY
+                        gotoStudentView(students)
+                    } else {
+                        gotoStudentView(students)
+                    }
+                } catch {
+                    Log.d("TAG", "Error: $it")
+                }
+            } else {
+                AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.studentNotInstalled)
+                    .setMessage(R.string.studentNotInstalledDesc)
+                    .setNegativeButton(android.R.string.cancel) { _: DialogInterface, _: Int -> }
+                    .setPositiveButton(android.R.string.ok) { _: DialogInterface, _: Int ->
+                        // Student app not installed, take the user to the Play Store
+                        gotoStudentPlayStoreListing()
+                    }
+                    .create().show()
+            }
+        }
+    }
+
+    private fun gotoStudentPlayStoreListing() {
+        // Send the user to the Play Store
+        val playStoreIntent: Intent = Intent(Intent.ACTION_VIEW).apply {
+            data = Uri.parse(MARKET_URI_PREFIX + CANVAS_STUDENT_ID)
+        }
+
+        startActivity(playStoreIntent)
+    }
+
+    private fun gotoStudentView(students: List<User>) {
+        // Student app is installed and we have a test student for this course. Take the user to the Student app
+        val testStudentId = students[0].id // Grab the id of the first test user - there should only be one
+        val token = ApiPrefs.getValidToken() // Need the user token so they can masquerade in the Student app
+
+        // Create bundle with test student user id
+        val studentViewIntent: Intent = Intent().apply {
+            `package` = CANVAS_STUDENT_ID
+            action = Const.INTENT_ACTION_STUDENT_VIEW
+            putExtra(Const.STUDENT_ID, testStudentId)
+            putExtra(Const.TOKEN, token)
+            putExtra(Const.COURSE_ID, mCanvasContext.id)
+            putExtra(Const.DOMAIN, ApiPrefs.domain)
+            putExtra(Const.CLIENT_ID, ApiPrefs.clientId)
+            putExtra(Const.CLIENT_SECRET, ApiPrefs.clientSecret)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+
+        // Send bundle to the student app
+        startActivity(studentViewIntent)
+    }
 }
+

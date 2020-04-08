@@ -33,10 +33,7 @@ import com.instructure.canvasapi2.utils.weave.awaitApi
 import com.instructure.canvasapi2.utils.weave.catch
 import com.instructure.canvasapi2.utils.weave.tryWeave
 import com.instructure.pandautils.dialogs.RatingDialog
-import com.instructure.pandautils.utils.AppType
-import com.instructure.pandautils.utils.ColorKeeper
-import com.instructure.pandautils.utils.ThemePrefs
-import com.instructure.pandautils.utils.toast
+import com.instructure.pandautils.utils.*
 import com.instructure.student.BuildConfig
 import com.instructure.student.R
 import com.instructure.student.fragment.InboxFragment
@@ -57,7 +54,8 @@ abstract class CallbackActivity : ParentActivity(), InboxFragment.OnUnreadCountI
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RatingDialog.showRatingDialog(this@CallbackActivity, AppType.STUDENT)
-        reloadCoreData()
+        if (intent.action != Const.INTENT_ACTION_STUDENT_VIEW)
+            reloadCoreData()
     }
 
     private fun loadInitialData() {

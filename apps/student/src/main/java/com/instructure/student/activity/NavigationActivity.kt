@@ -27,6 +27,7 @@ import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
@@ -147,7 +148,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
                     MasqueradingDialog.show(supportFragmentManager, ApiPrefs.domain, null, !isTablet)
                 }
                 R.id.navigationDrawerItem_stopMasquerading -> {
-                    MasqueradeHelper.stopMasquerading(NavigationActivity.startActivityClass)
+                    MasqueradeHelper.stopMasquerading(startActivityClass)
                 }
                 R.id.navigationDrawerSettings -> startActivity(Intent(applicationContext, SettingsActivity::class.java))
             }
@@ -171,6 +172,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
 
     override fun onResume() {
         super.onResume()
+        Log.d("TAG", "Navigation Activity onResume")
         applyCurrentFragmentTheme()
     }
 
@@ -185,9 +187,15 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        Log.d("TAG", "Navigation Activity onCreate")
+        Log.d("TAG", "ApiPrefs.user: ${ApiPrefs.user}")
+        Log.d("TAG", "ApiPrefs.domain: ${ApiPrefs.domain}")
+        Log.d("TAG", "ApiPrefs.isStudentView: ${ApiPrefs.isStudentView}")
+        Log.d("TAG", "ApiPrefs.isMasquerading: ${ApiPrefs.isMasquerading}")
+        Log.d("TAG", "ApiPrefs.clientId: ${ApiPrefs.clientId}")
+        Log.d("TAG", "ApiPrefs.clientSecret: ${ApiPrefs.clientSecret}")
         val masqueradingUserId: Long = intent.getLongExtra(Const.QR_CODE_MASQUERADE_ID, 0L)
-        if(masqueradingUserId != 0L) {
+        if (masqueradingUserId != 0L) {
             MasqueradeHelper.startMasquerading(masqueradingUserId, ApiPrefs.domain, NavigationActivity::class.java)
         }
 
@@ -203,12 +211,14 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
     }
 
     override fun initialCoreDataLoadingComplete() {
+        Log.d("TAG", "Initial core data loading complete")
         // We are ready to load our UI
         if (currentFragment == null) {
             loadLandingPage(true)
         }
 
-        if(ApiPrefs.user == null) {
+        if (ApiPrefs.user == null) {
+            Log.d("TAG", "initialCoreDataLoadingComplete | Student Logout Task")
             /* Hard case to repo but it's possible for a user to force exit the app
                before we finish saving the user but they will still launch into the app.
                if that happens, log out. */
@@ -223,6 +233,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
 
     override fun onStart() {
         super.onStart()
+        Log.d("TAG", "Navigation Activity onSTart")
         EventBus.getDefault().register(this)
     }
 
@@ -255,7 +266,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
     }
 
     override fun loadLandingPage(clearBackStack: Boolean) {
-        if(clearBackStack) clearBackStack(DashboardFragment::class.java)
+        if (clearBackStack) clearBackStack(DashboardFragment::class.java)
         val dashboardRoute = DashboardFragment.makeRoute(ApiPrefs.user)
         addFragment(DashboardFragment.newInstance(dashboardRoute), dashboardRoute)
 
@@ -299,6 +310,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        Log.d("TAG", "Navigation Activity onNewIntent")
         // Switching languages will trigger this, so we check for our Pending intent id
         if (hasPendingLanguageIntent(intent.extras) || hasLocalNotificationLink(intent.extras)) {
             handlePushNotification(hasUnreadPushNotification(intent.extras))
@@ -403,7 +415,7 @@ class NavigationActivity : BaseRouterActivity(), Navigation, MasqueradingDialog.
             override fun onDrawerClosed(drawerView: View) {
                 super.onDrawerClosed(drawerView)
                 invalidateOptionsMenu()
-                //make the scrollview that is inside the drawer scroll to the top
+                // Make the scrollview that is inside the drawer scroll to the top
                 navigationDrawer.scrollTo(0, 0)
             }
         }

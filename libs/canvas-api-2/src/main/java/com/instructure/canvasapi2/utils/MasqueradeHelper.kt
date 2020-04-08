@@ -21,6 +21,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
+import android.util.Log
 import android.webkit.CookieManager
 import com.instructure.canvasapi2.CanvasRestAdapter
 import com.instructure.canvasapi2.StatusCallback
@@ -31,6 +32,7 @@ import retrofit2.Call
 import retrofit2.Response
 import java.io.File
 import java.io.IOException
+import kotlin.system.exitProcess
 
 object MasqueradeHelper {
 
@@ -39,37 +41,70 @@ object MasqueradeHelper {
     @JvmStatic
     @JvmOverloads
     fun <ACTIVITY : Activity> stopMasquerading(startingClass: Class<ACTIVITY>? = null) {
-        if (ApiPrefs.isMasqueradingFromQRCode && masqueradeLogoutTask != null) {
+        if ((ApiPrefs.isMasqueradingFromQRCode || ApiPrefs.isStudentView) && masqueradeLogoutTask != null) {
+            // When masquerading as the test student, if we don't set these two prefs to false the teacher's token
+            // will become invalidated when we logout
+            ApiPrefs.isMasquerading = false
+            ApiPrefs.isStudentView = false
             masqueradeLogoutTask?.run()
             return
         }
-        ApiPrefs.isMasquerading = false
+
         ApiPrefs.masqueradeId = -1L
-        ApiPrefs.domain = ApiPrefs.originalDomain
+        ApiPrefs.domain = ""
         ApiPrefs.masqueradeDomain = ""
         ApiPrefs.masqueradeUser = null
+        ApiPrefs.accessToken = ""
+        ApiPrefs.clientSecret = ""
+        ApiPrefs.clientId = ""
+        ApiPrefs.isMasquerading = false
+        ApiPrefs.isStudentView = false
         cleanupMasquerading(ContextKeeper.appContext)
         if (startingClass != null) restartApplication(startingClass)
     }
 
     @JvmStatic
-    fun <ACTIVITY : Activity> startMasquerading(masqueradingUserId: Long, masqueradingDomain: String?, startingClass: Class<out ACTIVITY>) {
-        //Check to see if they're trying to switch domain as site admin
+    fun <ACTIVITY : Activity> startMasquerading(
+        masqueradingUserId: Long,
+        masqueradingDomain: String?,
+        startingClass: Class<out ACTIVITY>,
+        masqueradeToken: String = "",
+        masqueradeClientId: String = ApiPrefs.clientId,
+        masqueradeClientSecret: String = ApiPrefs.clientSecret) {
+        // Check to see if they're trying to switch domain as site admin, or masquerading as a test student from
+        // a different domain
+        Log.d("TAG", "Masquerading Domain: $masqueradingDomain")
         if (!masqueradingDomain.isNullOrBlank()) {
             // If we don't set isMasquerading to true here the original domain will be set to the masquerading domain, even if trying to
             // masquerade fails
             ApiPrefs.isMasquerading = true
+            ApiPrefs.isStudentView = !masqueradeToken.isBlank()
+
             ApiPrefs.masqueradeId = masqueradingUserId
-            // because isMasquerading is set to true this will also set the masqueradingDomain
-            ApiPrefs.domain = masqueradingDomain!!
+            // Because isMasquerading is set to true this will also set the masqueradingDomain
+            ApiPrefs.domain = masqueradingDomain
+            ApiPrefs.accessToken = masqueradeToken
+            ApiPrefs.clientId = masqueradeClientId
+            ApiPrefs.clientSecret = masqueradeClientSecret
         }
 
         try {
+            ApiPrefs.isMasquerading = false
+            Log.d("TAG", "Masquerade Helper: Get User")
             UserManager.getUser(masqueradingUserId, object : StatusCallback<User>() {
                 override fun onResponse(response: Response<User>, linkHeaders: LinkHeaders, type: ApiType) {
                     if (response.body() != null) {
                         cleanupMasquerading(ContextKeeper.appContext)
-                        ApiPrefs.masqueradeUser = response.body()
+                        ApiPrefs.isMasquerading = true // Will make ApiPrefs.user set the masquerade user
+                        ApiPrefs.user = response.body()
+                        Log.d("TAG", "Restarting application!!!")
+                        Log.d("TAG", "ApiPrefs.user: ${ApiPrefs.user}")
+                        Log.d("TAG", "ApiPrefs.masqueradeDomain: ${ApiPrefs.masqueradeDomain}")
+                        Log.d("TAG", "ApiPrefs.isStudentView: ${ApiPrefs.isStudentView}")
+                        Log.d("TAG", "ApiPrefs.isMasquerading: ${ApiPrefs.isMasquerading}")
+                        Log.d("TAG", "ApiPrefs.clientId: ${ApiPrefs.clientId}")
+                        Log.d("TAG", "ApiPrefs.clientSecret: ${ApiPrefs.clientSecret}")
+                        Log.d("TAG", "Restart to $startingClass")
                         restartApplication(startingClass)
                     }
                 }
@@ -80,21 +115,22 @@ object MasqueradeHelper {
                 }
             }, true)
         } catch (e: Exception) {
-            Logger.e("Error masquerading: " + e)
+            Logger.e("Error masquerading: $e")
             stopMasquerading(startingClass)
         }
     }
 
     private fun <ACTIVITY : Activity> restartApplication(startingClass: Class<ACTIVITY>) {
-        //totally restart the app so the masquerading will apply
-        val initActivity = Intent(ContextKeeper.appContext, startingClass)
-        val pendingIntent = PendingIntent.getActivity(ContextKeeper.appContext, 6660, initActivity, PendingIntent.FLAG_CANCEL_CURRENT)
+        // Totally restart the app so the masquerading will apply
+        val startupIntent = Intent(ContextKeeper.appContext, startingClass)
+        startupIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val pendingIntent = PendingIntent.getActivity(ContextKeeper.appContext, 6660, startupIntent, PendingIntent.FLAG_CANCEL_CURRENT)
         val alarmManager = ContextKeeper.appContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 1000, pendingIntent)
+        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 600, pendingIntent)
 
-        //Delays the exit long enough for all the shared preferences to be saved and caches to be cleared.
+        // Delays the exit long enough for all the shared preferences to be saved and caches to be cleared.
         Handler().postDelayed({
-            System.exit(0)
+//            exitProcess(0)
         }, 500)
     }
 
@@ -118,11 +154,10 @@ object MasqueradeHelper {
             } catch (e: IOException) {/* Do Nothing */ }
         }
 
-        val file: File
-        if (context.externalCacheDir != null) {
-            file = File(context.externalCacheDir, "attachments")
+        val file: File = if (context.externalCacheDir != null) {
+            File(context.externalCacheDir, "attachments")
         } else {
-            file = context.filesDir
+            context.filesDir
         }
 
         FileUtils.deleteAllFilesInDirectory(file)

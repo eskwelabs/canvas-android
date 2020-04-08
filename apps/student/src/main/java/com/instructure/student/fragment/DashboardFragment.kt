@@ -23,6 +23,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Log
 import android.view.*
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.DefaultItemAnimator
@@ -75,6 +76,7 @@ class DashboardFragment : ParentFragment() {
     override fun title(): String = if (isAdded) getString(R.string.dashboard) else ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Log.d("TAG", "Dashboard Fragment onCreate")
         TelemetryUtils.setInteractionName(this::class.java.simpleName)
         super.onCreate(savedInstanceState)
     }

@@ -258,4 +258,11 @@ object CourseManager {
         CourseAPI.getRubricSettings(courseId, rubricId, adapter, callback, params)
     }
 
+    @JvmStatic
+    fun getTestStudents(courseId: Long, forceNetwork: Boolean, callback: StatusCallback<List<User>>) {
+        val adapter = RestBuilder(callback)
+        val params = RestParams(isForceReadFromNetwork = forceNetwork)
+        CourseAPI.getTestStudents(courseId, adapter, params, callback)
+    }
+
 }

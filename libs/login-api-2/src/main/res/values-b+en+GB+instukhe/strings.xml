@@ -119,7 +119,7 @@
     <string name="masqueradeError">Error trying to masquerade.</string>
     <string name="masqueradeInfo">\"Act as\" is essentially logging in as this user without a password. You will be able to take any action as if you were this user, and from other users\' points of views, it will be as if this user performed them. However, audit logs record that you were the one who performed the actions on behalf of this user.</string>
     <string name="masqueradingAs">You are acting as %s</string>
-    <string name="stopActingAsTitle">Stop acting as...</string>
+    <string name="stopActingAsTitle">Stop acting as…</string>
     <string name="stopActingAsMessage">You will stop acting as %s and return to your account.</string>
 
     <string name="weMadeChanges">We\'ve made a few changes.</string>

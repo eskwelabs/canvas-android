@@ -47,7 +47,14 @@ object ApiPrefs : PrefManager(PREFERENCE_FILE_NAME) {
     var token by StringPref()
 
     @JvmStatic
-    var accessToken by StringPref()
+    var accessToken: String
+        get() = if (isMasquerading || isStudentView) masqueradeToken else originalToken
+        set(newToken) {
+            if (isMasquerading || isStudentView) masqueradeToken = newToken else originalToken = newToken
+        }
+
+    private var masqueradeToken by StringPref()
+    private var originalToken by StringPref("", "accessToken")
 
     @JvmStatic
     var refreshToken by StringPref()
@@ -62,11 +69,24 @@ object ApiPrefs : PrefManager(PREFERENCE_FILE_NAME) {
     @JvmStatic
     var userAgent by StringPref("", "user_agent")
 
-    @JvmStatic
-    var clientId by StringPref("", "client_id")
+    private var masqueradeClientId by StringPref()
+    private var masqueradeClientSecret by StringPref()
+    private var ogClientId by StringPref("", "client_id")
+    private var ogClientSecret by StringPref("", "client_secret")
 
     @JvmStatic
-    var clientSecret by StringPref("", "client_secret")
+    var clientId
+        get() = if (isMasquerading || isStudentView) masqueradeClientId else ogClientId
+        set(newId) {
+            if (isMasquerading || isStudentView) masqueradeClientId = newId else ogClientId = newId
+        }
+
+    @JvmStatic
+    var clientSecret
+        get() = if (isMasquerading || isStudentView) masqueradeClientSecret else ogClientSecret
+        set(newSecret) {
+            if (isMasquerading || isStudentView) masqueradeClientSecret = newSecret else ogClientSecret = newSecret
+        }
 
     @JvmStatic
     var perPageCount = 100
@@ -96,6 +116,8 @@ object ApiPrefs : PrefManager(PREFERENCE_FILE_NAME) {
     @JvmStatic
     var isMasquerading by BooleanPref()
     @JvmStatic
+    var isStudentView by BooleanPref()
+    @JvmStatic
     var isMasqueradingFromQRCode by BooleanPref()
     @JvmStatic
     var masqueradeId by LongPref(-1L)
@@ -104,15 +126,15 @@ object ApiPrefs : PrefManager(PREFERENCE_FILE_NAME) {
 
     @JvmStatic
     var domain: String
-        get() = if (isMasquerading) masqueradeDomain else originalDomain
+        get() = if (isMasquerading || isStudentView) masqueradeDomain else originalDomain
         set(newDomain) {
             val strippedDomain = newDomain.replaceFirst(Regex("https?://"), "").removeSuffix("/")
-            if (isMasquerading) masqueradeDomain = strippedDomain else originalDomain = strippedDomain
+            if (isMasquerading || isStudentView) masqueradeDomain = strippedDomain else originalDomain = strippedDomain
         }
 
     @JvmStatic
     val fullDomain: String
-        get() = if(isMasquerading)  {
+        get() = if(isMasquerading || isStudentView)  {
             when {
                 masqueradeDomain.isBlank() || protocol.isBlank() -> ""
                 URLUtil.isHttpUrl(masqueradeDomain) || URLUtil.isHttpsUrl(masqueradeDomain) -> masqueradeDomain
@@ -128,9 +150,9 @@ object ApiPrefs : PrefManager(PREFERENCE_FILE_NAME) {
 
     @JvmStatic
     var user: User?
-        get() = if (isMasquerading) masqueradeUser else originalUser
+        get() = if (isMasquerading || isStudentView) masqueradeUser else originalUser
         set(newUser) {
-            if (isMasquerading) masqueradeUser = newUser else originalUser = newUser
+            if (isMasquerading || isStudentView) masqueradeUser = newUser else originalUser = newUser
         }
 
     /* Notorious Prefs */
